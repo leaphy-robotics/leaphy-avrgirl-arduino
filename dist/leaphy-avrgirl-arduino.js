@@ -889,7 +889,6 @@ Connection.prototype._initAsync = async function() {
     autoOpen: false
   });
   Connection.prototype.serialPort.on('open', function() {
-    console.log("Received open event from serial port")
     //    _this.emit('connection:open');
   });
 };
