@@ -1,4 +1,4 @@
-var injectDependencies = function(boards, Connection, protocols) {
+var injectDependencies = function (boards, Connection, protocols) {
   var EventEmitter = require('events');
   var util = require('util');
   var tools = require('./lib/tools');
@@ -7,7 +7,7 @@ var injectDependencies = function(boards, Connection, protocols) {
    *
    * @param {object} opts - options for consumer to pass in
    */
-  var AvrgirlArduino = function(opts) {
+  var AvrgirlArduino = function (opts) {
     opts = opts || {};
 
     this.options = {
@@ -28,7 +28,7 @@ var injectDependencies = function(boards, Connection, protocols) {
     } else if (typeof this.options.debug === 'function') {
       this.debug = this.options.debug = this.options.debug;
     } else {
-      this.debug = this.options.debug = function debugNoop() {};
+      this.debug = this.options.debug = function debugNoop() { };
     }
 
     // handle 'sparse' boards, ie. boards with only the 'name' property defined
@@ -54,7 +54,7 @@ var injectDependencies = function(boards, Connection, protocols) {
     this.connection = new Connection(this.options);
 
     if (this.options.board) {
-      var Protocol = protocols[this.options.board.protocol] || function() {};
+      var Protocol = protocols[this.options.board.protocol] || function () { };
 
       this.protocol = new Protocol({
         board: this.options.board,
@@ -71,10 +71,56 @@ var injectDependencies = function(boards, Connection, protocols) {
 
   /**
    * Validates the board properties
-   *
-   * @param {function} callback - function to run upon completion/error
    */
-  AvrgirlArduino.prototype._validateBoard = function(callback) {
+  AvrgirlArduino.prototype._validateBoardSync = function () {
+    if (typeof this.options.board !== 'object') {
+      // cannot find a matching board in supported list
+      throw new Error('"' + this.options.board + '" is not a supported board type.');
+
+    } else if (!this.protocol.chip) {
+      // something went wrong trying to set up the protocol
+      var errorMsg = 'not a supported programming protocol: ' + this.options.board.protocol;
+      throw new Error(errorMsg);
+
+    } else if (!this.options.port && this.options.board.name === 'pro-mini') {
+      // when using a pro mini, a port is required in the options
+      throw new Error('using a pro-mini, please specify the port in your options.');
+
+    }
+  };
+
+  /**
+* Public method for opening the serial connecting to the Arduino
+*/
+  AvrgirlArduino.prototype.connectAsync = async function () {
+    var _this = this;
+
+    // validate board properties first
+    _this._validateBoardSync();
+
+    // Initialize the connection
+    await _this.connection._initAsync();
+
+    // Open the serialPort connection by user gesture
+    await _this.connection.serialPort.openAsync();
+  };
+
+  /**
+* Public method for flashing a hex file to the main program allocation of the Arduino
+*
+* @param {string} file - path to hex file for uploading
+*/
+  AvrgirlArduino.prototype.flashAsync = async function (file) {
+    var _this = this;
+    await _this.protocol._uploadAsync(file);
+  };
+
+  /**
+ * Validates the board properties
+ *
+ * @param {function} callback - function to run upon completion/error
+ */
+  AvrgirlArduino.prototype._validateBoard = function (callback) {
     if (typeof this.options.board !== 'object') {
       // cannot find a matching board in supported list
       return callback(new Error('"' + this.options.board + '" is not a supported board type.'));
@@ -94,26 +140,25 @@ var injectDependencies = function(boards, Connection, protocols) {
     }
   };
 
+
   /**
    * Public method for flashing a hex file to the main program allocation of the Arduino
    *
    * @param {string} file - path to hex file for uploading
    * @param {function} callback - function to run upon completion/error
    */
-  AvrgirlArduino.prototype.flash = function(file, callback) {
+  AvrgirlArduino.prototype.flash = function (file, callback) {
     var _this = this;
 
     // validate board properties first
-    _this._validateBoard(function(error) {
+    _this._validateBoard();
+
+    // set up serialport connection
+    _this.connection._init(function (error) {
       if (error) { return callback(error); }
 
-      // set up serialport connection
-      _this.connection._init(function(error) {
-        if (error) { return callback(error); }
-
-        // upload file to board
-        _this.protocol._upload(file, callback);
-      });
+      // upload file to board
+      _this.protocol._upload(file, callback);
     });
   };
 
@@ -124,16 +169,16 @@ var injectDependencies = function(boards, Connection, protocols) {
    * @param {function} callback - function to run upon completion/error
    */
   AvrgirlArduino.prototype.listPorts = AvrgirlArduino.listPorts =
-  AvrgirlArduino.prototype.list = AvrgirlArduino.list = function(callback) {
-    return Connection.prototype._listPorts(callback);
-  };
+    AvrgirlArduino.prototype.list = AvrgirlArduino.list = function (callback) {
+      return Connection.prototype._listPorts(callback);
+    };
 
   /**
    * Static method to return the names of all known boards.
    */
-  AvrgirlArduino.listKnownBoards = function() {
+  AvrgirlArduino.listKnownBoards = function () {
     // filter the boards to find all non-aliases
-    return Object.keys(boards).filter(function(name) {
+    return Object.keys(boards).filter(function (name) {
       // fetch the current board aliases
       var aliases = boards[name].aliases;
       // only allow the name if it's not an alias

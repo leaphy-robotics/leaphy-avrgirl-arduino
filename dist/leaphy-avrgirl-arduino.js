@@ -14,7 +14,7 @@ return /******/ (() => { // webpackBootstrap
 /***/ 1990:
 /***/ ((module, __unused_webpack_exports, __webpack_require__) => {
 
-var injectDependencies = function(boards, Connection, protocols) {
+var injectDependencies = function (boards, Connection, protocols) {
   var EventEmitter = __webpack_require__(7187);
   var util = __webpack_require__(9539);
   var tools = __webpack_require__(8623);
@@ -23,7 +23,7 @@ var injectDependencies = function(boards, Connection, protocols) {
    *
    * @param {object} opts - options for consumer to pass in
    */
-  var AvrgirlArduino = function(opts) {
+  var AvrgirlArduino = function (opts) {
     opts = opts || {};
 
     this.options = {
@@ -44,7 +44,7 @@ var injectDependencies = function(boards, Connection, protocols) {
     } else if (typeof this.options.debug === 'function') {
       this.debug = this.options.debug = this.options.debug;
     } else {
-      this.debug = this.options.debug = function debugNoop() {};
+      this.debug = this.options.debug = function debugNoop() { };
     }
 
     // handle 'sparse' boards, ie. boards with only the 'name' property defined
@@ -70,7 +70,7 @@ var injectDependencies = function(boards, Connection, protocols) {
     this.connection = new Connection(this.options);
 
     if (this.options.board) {
-      var Protocol = protocols[this.options.board.protocol] || function() {};
+      var Protocol = protocols[this.options.board.protocol] || function () { };
 
       this.protocol = new Protocol({
         board: this.options.board,
@@ -87,10 +87,56 @@ var injectDependencies = function(boards, Connection, protocols) {
 
   /**
    * Validates the board properties
-   *
-   * @param {function} callback - function to run upon completion/error
    */
-  AvrgirlArduino.prototype._validateBoard = function(callback) {
+  AvrgirlArduino.prototype._validateBoardSync = function () {
+    if (typeof this.options.board !== 'object') {
+      // cannot find a matching board in supported list
+      throw new Error('"' + this.options.board + '" is not a supported board type.');
+
+    } else if (!this.protocol.chip) {
+      // something went wrong trying to set up the protocol
+      var errorMsg = 'not a supported programming protocol: ' + this.options.board.protocol;
+      throw new Error(errorMsg);
+
+    } else if (!this.options.port && this.options.board.name === 'pro-mini') {
+      // when using a pro mini, a port is required in the options
+      throw new Error('using a pro-mini, please specify the port in your options.');
+
+    }
+  };
+
+  /**
+* Public method for opening the serial connecting to the Arduino
+*/
+  AvrgirlArduino.prototype.connectAsync = async function () {
+    var _this = this;
+
+    // validate board properties first
+    _this._validateBoardSync();
+
+    // Initialize the connection
+    await _this.connection._initAsync();
+
+    // Open the serialPort connection by user gesture
+    await _this.connection.serialPort.openAsync();
+  };
+
+  /**
+* Public method for flashing a hex file to the main program allocation of the Arduino
+*
+* @param {string} file - path to hex file for uploading
+*/
+  AvrgirlArduino.prototype.flashAsync = async function (file) {
+    var _this = this;
+    await _this.protocol._uploadAsync(file);
+  };
+
+  /**
+ * Validates the board properties
+ *
+ * @param {function} callback - function to run upon completion/error
+ */
+  AvrgirlArduino.prototype._validateBoard = function (callback) {
     if (typeof this.options.board !== 'object') {
       // cannot find a matching board in supported list
       return callback(new Error('"' + this.options.board + '" is not a supported board type.'));
@@ -110,26 +156,25 @@ var injectDependencies = function(boards, Connection, protocols) {
     }
   };
 
+
   /**
    * Public method for flashing a hex file to the main program allocation of the Arduino
    *
    * @param {string} file - path to hex file for uploading
    * @param {function} callback - function to run upon completion/error
    */
-  AvrgirlArduino.prototype.flash = function(file, callback) {
+  AvrgirlArduino.prototype.flash = function (file, callback) {
     var _this = this;
 
     // validate board properties first
-    _this._validateBoard(function(error) {
+    _this._validateBoard();
+
+    // set up serialport connection
+    _this.connection._init(function (error) {
       if (error) { return callback(error); }
 
-      // set up serialport connection
-      _this.connection._init(function(error) {
-        if (error) { return callback(error); }
-
-        // upload file to board
-        _this.protocol._upload(file, callback);
-      });
+      // upload file to board
+      _this.protocol._upload(file, callback);
     });
   };
 
@@ -140,16 +185,16 @@ var injectDependencies = function(boards, Connection, protocols) {
    * @param {function} callback - function to run upon completion/error
    */
   AvrgirlArduino.prototype.listPorts = AvrgirlArduino.listPorts =
-  AvrgirlArduino.prototype.list = AvrgirlArduino.list = function(callback) {
-    return Connection.prototype._listPorts(callback);
-  };
+    AvrgirlArduino.prototype.list = AvrgirlArduino.list = function (callback) {
+      return Connection.prototype._listPorts(callback);
+    };
 
   /**
    * Static method to return the names of all known boards.
    */
-  AvrgirlArduino.listKnownBoards = function() {
+  AvrgirlArduino.listKnownBoards = function () {
     // filter the boards to find all non-aliases
-    return Object.keys(boards).filter(function(name) {
+    return Object.keys(boards).filter(function (name) {
       // fetch the current board aliases
       var aliases = boards[name].aliases;
       // only allow the name if it's not an alias
@@ -674,8 +719,43 @@ class SerialPort extends EventEmitter {
 
   list(callback) {
     return navigator.serial.getPorts()
-      .then((list) => {if (callback) {return callback(null, list)}})
-      .catch((error) => {if (callback) {return callback(error)}}); 
+      .then((list) => { if (callback) { return callback(null, list) } })
+      .catch((error) => { if (callback) { return callback(error) } });
+  }
+
+  async openAsync() {
+    var serialPort = await window.navigator.serial.requestPort(this.requestOptions);
+    this.port = serialPort;
+    if (this.isOpen) return;
+    try {
+      await this.port.open({ baudRate: this.baudRate || 57600 });
+    }
+    catch (err) {
+      console.log("Error while opening serial port:", err);
+    }
+    this.writer = await this.port.writable.getWriter()
+    this.reader = await this.port.readable.getReader()
+    this.emit('open');
+    this.isOpen = true;
+
+    this.emitOnReadAsync(); // Intentionally not awaited
+    
+    console.log("Succesfully opened Serial Connection");
+  }
+
+  async emitOnReadAsync() {
+    while (this.port.readable.locked) {
+      console.log("while port.readable.locked");
+      try {
+        const { value, done } = await this.reader.read();
+        if (done) {
+          break;
+        }
+        this.emit('data', Buffer.from(value));
+      } catch (e) {
+        console.error(e);
+      }
+    }
   }
 
   open(callback) {
@@ -703,7 +783,7 @@ class SerialPort extends EventEmitter {
           }
         }
       })
-      .catch(error => {callback(error)});
+      .catch(error => { callback(error) });
   }
 
   async close(callback) {
@@ -795,6 +875,24 @@ var Connection = function(options) {
       `Sorry, we currently don't support ${this.board.name} or other avr109 boards in webserial. Please see https://github.com/noopkat/avrgirl-arduino/issues/204#issuecomment-703284131 for further details`
     );
   }
+};
+
+Connection.prototype._initAsync = async function() {
+  await this._setUpSerialAsync();
+};
+
+/**
+ * Create new serialport instance for the Arduino board, but do not immediately connect.
+ */
+ Connection.prototype._setUpSerialAsync = async function() {
+  Connection.prototype.serialPort = new Serialport('', {
+    baudRate: this.board.baud,
+    autoOpen: false
+  });
+  Connection.prototype.serialPort.on('open', function() {
+    console.log("Received open event from serial port")
+    //    _this.emit('connection:open');
+  });
 };
 
 Connection.prototype._init = function(callback) {
@@ -1100,6 +1198,49 @@ Stk500v1.prototype._upload = function(file, callback) {
     });
   });
 };
+
+/**
+ * Uploads the provided hex file to the board, via the stk500v1 protocol
+ *
+ * @param {string} file - path to hex file for uploading
+ */
+ Stk500v1.prototype._uploadAsync = async function(file) {
+  var _this = this;
+  
+  this.serialPort = this.connection.serialPort;
+
+  // open/parse supplied hex file
+  var hex = tools._parseHex(file);
+  
+  if (!Buffer.isBuffer(hex)) {
+    console.log("File Hex is not a buffer", hex);
+    return;
+  }
+
+  // reset
+  _this._reset(function(error) {
+    if (error) { 
+      console.log("Error while resetting:", error);
+      throw new Error(error)
+     }
+
+    console.log('flashing, please wait...');
+
+    // flash
+    _this.chip.bootload(_this.serialPort, hex, _this.board, function(error) {
+      if(error){
+        console.log("Error while flashing:", error);
+        throw new Error(error);
+      }
+
+      console.log('flash complete.');
+
+      // Always close the serialport
+      _this.serialPort.close();
+    });
+  });
+};
+
 
 Stk500v1.prototype._reset = function(callback) {
   var _this = this;
