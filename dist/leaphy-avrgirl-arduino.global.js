@@ -736,7 +736,6 @@ class SerialPort extends EventEmitter {
 
   async emitOnReadAsync() {
     while (this.port.readable.locked) {
-      console.log("while port.readable.locked");
       try {
         const { value, done } = await this.reader.read();
         if (done) {
