@@ -102,6 +102,11 @@ var injectDependencies = function (boards, Connection, protocols) {
   AvrgirlArduino.prototype.connectAsync = async function () {
     var _this = this;
 
+    if(_this.connection.serialPort && _this.connection.serialPort.isOpen){
+      console.log("Connection already open");
+      return;
+    }
+
     // validate board properties first
     _this._validateBoardSync();
 
@@ -1225,7 +1230,7 @@ Stk500v1.prototype._upload = function(file, callback) {
       console.log('flash complete.');
 
       // Always close the serialport
-      _this.serialPort.close();
+      //_this.serialPort.close();
     });
   });
 };

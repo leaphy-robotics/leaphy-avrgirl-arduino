@@ -1,6 +1,6 @@
 {
   "name": "leaphy-avrgirl-arduino",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "A web library for flashing compiled sketch files to Arduino microcontroller boards.",
   "main": "leaphy-avrgirl-arduino.js",
   "module": "dist/leaphy-avrgirl-arduino.min.js",

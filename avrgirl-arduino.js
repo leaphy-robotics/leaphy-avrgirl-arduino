@@ -95,6 +95,11 @@ var injectDependencies = function (boards, Connection, protocols) {
   AvrgirlArduino.prototype.connectAsync = async function () {
     var _this = this;
 
+    if(_this.connection.serialPort && _this.connection.serialPort.isOpen){
+      console.log("Connection already open");
+      return;
+    }
+
     // validate board properties first
     _this._validateBoardSync();
 
